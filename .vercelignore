@@ -1,0 +1,7 @@
+server.out.log
+server.err.log
+original.html
+assets/*
+!assets/IMG_2744.JPG.jpeg
+!assets/kazakh-script.woff2
+!assets/toi-music.mp3

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ернар & Диана</title>
+    <meta
+      name="description"
+      content="Свадебное приглашение Ернара и Дианы"
+    />
+    <link rel="preload" href="app.css" as="style" />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <audio id="bgMusic" loop preload="auto">
+      <source
+        src="assets/toi-music.mp3"
+        type="audio/mpeg"
+      />
+    </audio>
+
+    <button class="music-button floating-music" id="musicToggle" type="button" aria-label="Включить музыку">
+      ♪
+    </button>
+
+    <main id="home">
+      <section class="hero" aria-labelledby="heroTitle">
+        <figure class="hero__photo" data-reveal="fade">
+          <img src="assets/IMG_2744.JPG.jpeg" alt="Ернар мен Диана ұлттық киімде" />
+        </figure>
+        <div class="hero__content">
+          <h1 id="heroTitle" data-reveal="up">Ернар & Диана</h1>
+          <p class="hero__lead" data-reveal="up">
+            Құрметті ағайын-туыс, құда-жекжат, дос-жаран! Сіздерді қуанышымызға
+            ортақ болып, тойымыздың қадірлі қонағы болуға шақырамыз.
+          </p>
+          <div class="hero__actions" data-reveal="up">
+            <a class="primary-button" href="#rsvp">Қатысуымды растаймын</a>
+            <a class="ghost-button" href="#route">Мекенжайды көру</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section countdown-section" aria-labelledby="countdownTitle">
+        <div class="section-heading" data-reveal="up">
+          <p class="eyebrow">Кері санау</p>
+          <h2 id="countdownTitle">Тойға дейін</h2>
+        </div>
+        <div class="countdown" id="countdown" aria-live="polite">
+          <div data-reveal="up"><strong id="days">00</strong><span>күн</span></div>
+          <div data-reveal="up" style="--reveal-delay: 80ms"><strong id="hours">00</strong><span>сағат</span></div>
+          <div data-reveal="up" style="--reveal-delay: 160ms"><strong id="minutes">00</strong><span>минут</span></div>
+          <div data-reveal="up" style="--reveal-delay: 240ms"><strong id="seconds">00</strong><span>секунд</span></div>
+        </div>
+        <p class="countdown-note" id="countdownNote" data-reveal="up"></p>
+      </section>
+
+      <section class="section details" id="details" aria-labelledby="detailsTitle">
+        <div class="section-heading" data-reveal="up">
+          <p class="eyebrow">Той туралы</p>
+          <h2 id="detailsTitle">Маңызды ақпарат</h2>
+        </div>
+        <div class="detail-grid">
+          <article data-reveal="up">
+            <span>Күні</span>
+            <strong>03.08.2026</strong>
+          </article>
+          <article data-reveal="up" style="--reveal-delay: 90ms">
+            <span>Уақыты</span>
+            <strong>19:00</strong>
+          </article>
+          <article data-reveal="up" style="--reveal-delay: 180ms">
+            <span>Той иелері</span>
+            <strong>Нұрланқазы - Үміт</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="section route" id="route" aria-labelledby="routeTitle">
+        <div class="route__copy" data-reveal="left">
+          <p class="eyebrow">Мекенжай</p>
+          <h2 id="routeTitle">Той өтетін орын</h2>
+          <p id="addressText"></p>
+          <div class="route__actions">
+            <a
+              class="primary-button"
+              href="https://2gis.kz/turkestan/geo/70000001106093046/68.244340,43.317621"
+              target="_blank"
+              rel="noopener"
+            >
+              <span class="gis-icon" aria-hidden="true">2GIS</span>
+              Маршрут құру
+            </a>
+            <button class="ghost-button" id="copyAddress" type="button">
+              Адресті көшіру
+            </button>
+          </div>
+          <p class="status-text" id="copyStatus" aria-live="polite"></p>
+        </div>
+        <a
+          class="map-link"
+          href="https://2gis.kz/turkestan/geo/70000001106093046/68.244340,43.317621"
+          target="_blank"
+          rel="noopener"
+          data-reveal="right"
+          aria-label="Открыть маршрут в 2GIS"
+        >
+          <span class="gis-icon" aria-hidden="true">2GIS</span>
+          <strong>Жеті қазына-2</strong>
+          <small>Карта мен маршрут жаңа бетте ашылады</small>
+        </a>
+      </section>
+
+      <section class="section rsvp" id="rsvp" aria-labelledby="rsvpTitle">
+        <div class="section-heading" data-reveal="up">
+          <p class="eyebrow">Қатысуды растау</p>
+          <h2 id="rsvpTitle">Жауабыңызды қалдырыңыз</h2>
+        </div>
+        <form class="rsvp-form" id="rsvpForm" data-reveal="up">
+          <label>
+            <span>Аты-жөніңіз</span>
+            <input name="fullName" type="text" autocomplete="name" required />
+          </label>
+
+          <label>
+            <span>Іс-шара иесіне кім болып келесіз?</span>
+            <select name="relation" id="relationSelect" required>
+              <option value="">Таңдаңыз</option>
+              <option>Туысы</option>
+              <option>Құда-жекжат</option>
+              <option>Досы</option>
+              <option>Әріптесі</option>
+              <option>Көршісі</option>
+              <option value="Басқа">Басқа</option>
+            </select>
+          </label>
+
+          <label class="relation-other" id="relationOther" hidden>
+            <span>Өзіңіз жазыңыз</span>
+            <input name="relationOther" type="text" maxlength="80" />
+          </label>
+
+          <fieldset>
+            <legend>Тойға келесіз бе?</legend>
+            <label class="radio-line">
+              <input type="radio" name="attendance" value="Иә, келемін" required />
+              <span>Иә, келемін</span>
+            </label>
+            <label class="radio-line">
+              <input type="radio" name="attendance" value="Жұбайыммен келемін" />
+              <span>Жұбайыммен келемін</span>
+            </label>
+            <label class="radio-line">
+              <input type="radio" name="attendance" value="Өкінішке қарай келе алмаймын" />
+              <span>Өкінішке қарай келе алмаймын</span>
+            </label>
+          </fieldset>
+
+          <label>
+            <span>Адам саны</span>
+            <input name="guestCount" type="number" min="1" max="10" value="1" required />
+          </label>
+
+          <button class="primary-button" type="submit">Жауапты жіберу</button>
+          <p class="status-text" id="formStatus" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Ернар & Диана · 03.08.2026</p>
+    </footer>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
