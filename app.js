@@ -2,6 +2,8 @@ const CONFIG = {
   eventDate: "2026-08-03T18:00:00+05:00",
   address: "Жеті қазына-2, Түркістан қаласы",
   mapUrl: "https://2gis.kz/turkestan/geo/70000001106093046/68.244340,43.317621",
+  apiUrl: "/api/rsvp",
+  adminTokenKey: "rsvp_admin_token",
   dbName: "ernar_aruzhan_invitation",
   storeName: "rsvp_answers",
   adminPaths: ["/admin", "/админ"],
@@ -54,34 +56,119 @@ function saveFallbackRow(answer) {
   localStorage.setItem(CONFIG.storeName, JSON.stringify(rows));
 }
 
-async function addGuest(answer) {
+function sortRows(rows) {
+  return rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function rowKey(row) {
+  return [row.id, row.createdAt, row.fullName, row.attendance, row.guestCount].join("|");
+}
+
+function mergeRows(...groups) {
+  const seen = new Set();
+  return sortRows(
+    groups
+      .flat()
+      .filter(Boolean)
+      .filter((row) => {
+        const key = rowKey(row);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+  );
+}
+
+async function getLocalGuests() {
+  let indexedRows = [];
+
   try {
     const db = await openDatabase();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(CONFIG.storeName, "readwrite");
-      const request = tx.objectStore(CONFIG.storeName).add(answer);
+    indexedRows = await new Promise((resolve, reject) => {
+      const tx = db.transaction(CONFIG.storeName, "readonly");
+      const request = tx.objectStore(CONFIG.storeName).getAll();
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
   } catch {
-    saveFallbackRow(answer);
-    return answer.id;
+    indexedRows = [];
   }
+
+  return mergeRows(indexedRows, getFallbackRows());
 }
 
-async function getGuests() {
+async function addRemoteGuest(answer) {
+  const response = await fetch(CONFIG.apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(answer),
+  });
+
+  if (!response.ok) {
+    throw new Error("Remote RSVP storage is unavailable");
+  }
+
+  return response.json();
+}
+
+async function getRemoteGuests() {
+  let adminToken = sessionStorage.getItem(CONFIG.adminTokenKey);
+
+  if (!adminToken) {
+    adminToken = window.prompt("Admin code");
+    if (!adminToken) throw new Error("Admin token is required");
+    sessionStorage.setItem(CONFIG.adminTokenKey, adminToken);
+  }
+
+  const response = await fetch(CONFIG.apiUrl, {
+    headers: {
+      Accept: "application/json",
+      "X-Admin-Token": adminToken,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionStorage.removeItem(CONFIG.adminTokenKey);
+    }
+    throw new Error("Remote RSVP storage is unavailable");
+  }
+
+  const data = await response.json();
+  return Array.isArray(data.rows) ? data.rows : [];
+}
+
+async function addGuest(answer) {
+  const localAnswer = { ...answer, id: answer.id || Date.now() };
+
+  try {
+    await addRemoteGuest(localAnswer);
+  } catch {
+    // Keep the form useful even before shared storage is configured in Vercel.
+  }
+
   try {
     const db = await openDatabase();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(CONFIG.storeName, "readonly");
-      const request = tx.objectStore(CONFIG.storeName).getAll();
-      request.onsuccess = () => {
-        resolve(request.result.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-      };
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(CONFIG.storeName, "readwrite");
+      const request = tx.objectStore(CONFIG.storeName).add(localAnswer);
+      request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
   } catch {
-    return getFallbackRows().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    saveFallbackRow(localAnswer);
+  }
+
+  return localAnswer.id;
+}
+
+async function getGuests() {
+  const localRows = await getLocalGuests();
+
+  try {
+    return mergeRows(await getRemoteGuests(), localRows);
+  } catch {
+    return localRows;
   }
 }
 
