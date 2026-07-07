@@ -144,10 +144,41 @@ function setupMusic() {
     toggle.classList.toggle("is-playing", isPlaying);
   }
 
+  async function playMusic() {
+    try {
+      await music.play();
+      setPlaying(true);
+      return true;
+    } catch {
+      setPlaying(false);
+      return false;
+    }
+  }
+
+  function enableAfterFirstInteraction() {
+    const events = ["pointerdown", "keydown", "touchstart"];
+    const start = async () => {
+      const started = await playMusic();
+      if (started) {
+        events.forEach((eventName) => {
+          document.removeEventListener(eventName, start);
+        });
+      }
+    };
+
+    events.forEach((eventName) => {
+      document.addEventListener(eventName, start, { once: true });
+    });
+  }
+
+  playMusic().then((started) => {
+    if (!started) enableAfterFirstInteraction();
+  });
+
   toggle.addEventListener("click", async () => {
     if (music.paused) {
       try {
-        await music.play();
+        await playMusic();
         setPlaying(true);
       } catch {
         setPlaying(false);
