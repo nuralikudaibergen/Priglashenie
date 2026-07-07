@@ -403,7 +403,8 @@ function setupAdminRoute() {
 
   function isAdminPath() {
     const path = decodeURIComponent(window.location.pathname).replace(/\/$/, "");
-    return CONFIG.adminPaths.includes(path);
+    const params = new URLSearchParams(window.location.search);
+    return CONFIG.adminPaths.includes(path) || params.has("admin");
   }
 
   async function showAdmin() {
