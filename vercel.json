@@ -3,6 +3,10 @@
     {
       "source": "/admin",
       "destination": "/index.html"
+    },
+    {
+      "source": "/админ",
+      "destination": "/index.html"
     }
   ],
   "cleanUrls": true,

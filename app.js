@@ -4,7 +4,7 @@ const CONFIG = {
   mapUrl: "https://2gis.kz/turkestan/geo/70000001106093046/68.244340,43.317621",
   dbName: "ernar_aruzhan_invitation",
   storeName: "rsvp_answers",
-  adminPath: "/admin",
+  adminPaths: ["/admin", "/админ"],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -402,7 +402,8 @@ function setupAdminRoute() {
   $("#exportCsv").addEventListener("click", exportGuestsCsv);
 
   function isAdminPath() {
-    return window.location.pathname.replace(/\/$/, "") === CONFIG.adminPath;
+    const path = decodeURIComponent(window.location.pathname).replace(/\/$/, "");
+    return CONFIG.adminPaths.includes(path);
   }
 
   async function showAdmin() {
