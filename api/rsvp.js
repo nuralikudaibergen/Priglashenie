@@ -72,6 +72,18 @@ async function writeKvRows(rows) {
   await kv(["SET", STORE_KEY, JSON.stringify(rows)]);
 }
 
+async function deleteKvRow(id) {
+  const rows = await readKvRows();
+  const nextRows = rows.filter((row) => String(row.id) !== String(id));
+
+  if (nextRows.length === rows.length) {
+    throw new Error("RSVP row was not found");
+  }
+
+  await writeKvRows(nextRows);
+  return nextRows;
+}
+
 async function readSheetRows() {
   const apiUrl = process.env.SHEETS_API_URL;
   if (!apiUrl) throw new Error("Google Sheets API URL is not configured");
@@ -157,6 +169,10 @@ async function writeRow(answer) {
   await notifyTelegram(answer).catch(() => {});
 }
 
+async function deleteRow(id) {
+  return sortRows(await deleteKvRow(id));
+}
+
 module.exports = async function handler(request, response) {
   response.setHeader("Cache-Control", "no-store");
 
@@ -180,10 +196,29 @@ module.exports = async function handler(request, response) {
       return response.status(201).json({ ok: true, answer });
     }
 
-    response.setHeader("Allow", "GET, POST");
+    if (request.method === "DELETE") {
+      if (!isAdminAuthorized(request)) {
+        return response.status(401).json({ error: "Unauthorized" });
+      }
+
+      const body = parseBody(request.body);
+      const id = body.id || request.query?.id;
+
+      if (!id) {
+        return response.status(400).json({ error: "RSVP id is required" });
+      }
+
+      return response.status(200).json({ ok: true, rows: await deleteRow(id) });
+    }
+
+    response.setHeader("Allow", "GET, POST, DELETE");
     return response.status(405).json({ error: "Method not allowed" });
   } catch (error) {
-    const status = /not configured|Unauthorized/i.test(error.message) ? 503 : 502;
+    const status = /not configured|Unauthorized/i.test(error.message)
+      ? 503
+      : /not found/i.test(error.message)
+        ? 404
+        : 502;
     return response.status(status).json({
       error: "RSVP storage failed",
       details: error.message,

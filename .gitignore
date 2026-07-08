@@ -1,6 +1,7 @@
 server.out.log
 server.err.log
 .vercel/
+.claude/
 node_modules/
 original.html
 assets/*

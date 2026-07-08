@@ -12,6 +12,9 @@ const CONFIG = {
 const $ = (selector) => document.querySelector(selector);
 
 let dbPromise;
+let adminFilter = "all";
+let adminRowsCache = [];
+let adminLoginResolve;
 
 function openDatabase() {
   if (!("indexedDB" in window)) {
@@ -111,11 +114,11 @@ async function addRemoteGuest(answer) {
   return response.json();
 }
 
-async function getRemoteGuests() {
+async function getRemoteGuests(message = "") {
   let adminToken = sessionStorage.getItem(CONFIG.adminTokenKey);
 
   if (!adminToken) {
-    adminToken = window.prompt("Admin code");
+    adminToken = await requestAdminToken(message);
     if (!adminToken) throw new Error("Admin token is required");
     sessionStorage.setItem(CONFIG.adminTokenKey, adminToken);
   }
@@ -131,11 +134,49 @@ async function getRemoteGuests() {
     if (response.status === 401) {
       sessionStorage.removeItem(CONFIG.adminTokenKey);
     }
-    throw new Error("Remote RSVP storage is unavailable");
+    const error = new Error("Remote RSVP storage is unavailable");
+    error.status = response.status;
+    throw error;
   }
 
   const data = await response.json();
   return Array.isArray(data.rows) ? data.rows : [];
+}
+
+async function deleteRemoteGuest(id) {
+  const adminToken = sessionStorage.getItem(CONFIG.adminTokenKey) || (await requestAdminToken());
+  const response = await fetch(CONFIG.apiUrl, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Token": adminToken,
+    },
+    body: JSON.stringify({ id }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionStorage.removeItem(CONFIG.adminTokenKey);
+    }
+    throw new Error("Delete failed");
+  }
+
+  return response.json();
+}
+
+async function deleteLocalGuest(id) {
+  try {
+    const db = await openDatabase();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(CONFIG.storeName, "readwrite");
+      const request = tx.objectStore(CONFIG.storeName).delete(Number(id));
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    const rows = getFallbackRows().filter((row) => String(row.id) !== String(id));
+    localStorage.setItem(CONFIG.storeName, JSON.stringify(rows));
+  }
 }
 
 async function addGuest(answer) {
@@ -172,6 +213,26 @@ async function getGuests() {
   }
 }
 
+async function getAdminGuests() {
+  const localRows = await getLocalGuests();
+  let message = "";
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return mergeRows(await getRemoteGuests(message), localRows);
+    } catch (error) {
+      if (error.status === 401) {
+        message = "Құпия код дұрыс емес.";
+        continue;
+      }
+
+      return localRows;
+    }
+  }
+
+  return localRows;
+}
+
 function formatDate(value) {
   return new Intl.DateTimeFormat("ru-RU", {
     dateStyle: "medium",
@@ -186,6 +247,53 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function requestAdminToken(message = "") {
+  const dialog = $("#adminLogin");
+  const input = $("#adminPassword");
+  const error = $("#adminLoginError");
+
+  if (!dialog || !input) {
+    return Promise.resolve(window.prompt("Admin code"));
+  }
+
+  dialog.hidden = false;
+  document.body.classList.add("has-modal");
+  if (error) error.textContent = message;
+  input.value = "";
+  requestAnimationFrame(() => input.focus());
+
+  return new Promise((resolve) => {
+    adminLoginResolve = (token) => {
+      dialog.hidden = true;
+      document.body.classList.remove("has-modal");
+      resolve(token);
+    };
+  });
+}
+
+function showThanksAnimation() {
+  const existing = $(".thanks-overlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.className = "thanks-overlay";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.innerHTML = `
+    <div class="thanks-card">
+      <span class="thanks-mark" aria-hidden="true">✓</span>
+      <strong>Рақмет!</strong>
+      <p>Жауабыңыз сақталды.</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  window.setTimeout(() => {
+    overlay.classList.add("is-hiding");
+    window.setTimeout(() => overlay.remove(), 280);
+  }, 2200);
 }
 
 function setCountdown() {
@@ -341,6 +449,7 @@ function setupRsvpForm() {
     try {
       await addGuest(answer);
       status.textContent = "Рақмет! Жауабыңыз сақталды.";
+      showThanksAnimation();
       form.reset();
       form.guestCount.value = 1;
       document.dispatchEvent(new CustomEvent("rsvp:reset"));
@@ -379,6 +488,16 @@ function setupRevealAnimations() {
   });
 }
 
+function isDeclined(row) {
+  return String(row.attendance || "").toLowerCase().includes("алмай");
+}
+
+function getFilteredAdminRows(rows) {
+  if (adminFilter === "attending") return rows.filter((row) => !isDeclined(row));
+  if (adminFilter === "declined") return rows.filter(isDeclined);
+  return rows;
+}
+
 function rowsToCsv(rows) {
   const headers = ["Аты-жөні", "Кім болады", "Жауабы", "Адам саны", "Уақыты"];
   const values = rows.map((row) => [
@@ -395,7 +514,7 @@ function rowsToCsv(rows) {
 }
 
 async function exportGuestsCsv() {
-  const rows = await getGuests();
+  const rows = getFilteredAdminRows(adminRowsCache.length ? adminRowsCache : await getAdminGuests());
   const blob = new Blob(["\ufeff", rowsToCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -406,15 +525,17 @@ async function exportGuestsCsv() {
 }
 
 async function renderAdmin() {
-  const rows = await getGuests();
+  const rows = await getAdminGuests();
+  adminRowsCache = rows;
+  const visibleRows = getFilteredAdminRows(rows);
   const tbody = $("#guestRows");
   if (!tbody) return;
 
-  if (rows.length === 0) {
+  if (visibleRows.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="5">Әзірге жауап жоқ. Алғашқы RSVP осы жерде пайда болады.</td></tr>';
+      '<tr><td colspan="6">Әзірге жауап жоқ. Алғашқы RSVP осы жерде пайда болады.</td></tr>';
   } else {
-    tbody.innerHTML = rows
+    tbody.innerHTML = visibleRows
       .map(
         (row) => `
           <tr>
@@ -423,19 +544,30 @@ async function renderAdmin() {
             <td>${escapeHtml(row.attendance)}</td>
             <td>${escapeHtml(row.guestCount)}</td>
             <td>${escapeHtml(formatDate(row.createdAt))}</td>
+            <td>
+              <button class="danger-button" type="button" data-delete-guest="${escapeHtml(row.id)}">
+                Жою
+              </button>
+            </td>
           </tr>
         `,
       )
       .join("");
   }
 
-  const attendingRows = rows.filter((row) => row.attendance !== "Өкінішке қарай келе алмаймын");
+  const attendingRows = rows.filter((row) => !isDeclined(row));
+  const declinedRows = rows.filter(isDeclined);
   $("#totalAnswers").textContent = rows.length;
-  $("#attendingAnswers").textContent = attendingRows.length;
+  $("#attendingAnswers").textContent = rows.length - declinedRows.length;
+  $("#declinedAnswers").textContent = declinedRows.length;
   $("#totalGuests").textContent = attendingRows.reduce(
     (sum, row) => sum + (Number(row.guestCount) || 0),
     0,
   );
+
+  document.querySelectorAll("[data-admin-filter]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.adminFilter === adminFilter);
+  });
 }
 
 function setupAdminRoute() {
@@ -448,6 +580,18 @@ function setupAdminRoute() {
   adminSection.hidden = true;
   adminSection.setAttribute("aria-labelledby", "adminTitle");
   adminSection.innerHTML = `
+    <div class="admin-login" id="adminLogin" hidden>
+      <form class="admin-login__panel" id="adminLoginForm">
+        <p class="eyebrow">Admin</p>
+        <h2>Кіру</h2>
+        <label>
+          <span>Құпия код</span>
+          <input id="adminPassword" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="primary-button" type="submit">Кіру</button>
+        <p class="status-text" id="adminLoginError" aria-live="polite"></p>
+      </form>
+    </div>
     <div class="section-heading">
       <p class="eyebrow">Админ панель</p>
       <h2 id="adminTitle">Қонақтар тізімі</h2>
@@ -462,10 +606,43 @@ function setupAdminRoute() {
         <span>келетін жауап</span>
       </div>
       <div>
+        <strong id="declinedAnswers">0</strong>
+        <span>келе алмайды</span>
+      </div>
+      <div>
         <strong id="totalGuests">0</strong>
         <span>адам саны</span>
       </div>
     </div>
+    <div class="admin-toolbar" aria-label="Қонақтар сүзгісі">
+      <button class="filter-button is-active" type="button" data-admin-filter="all">Барлығы</button>
+      <button class="filter-button" type="button" data-admin-filter="attending">Келетіндер</button>
+      <button class="filter-button" type="button" data-admin-filter="declined">Келе алмайды</button>
+    </div>
+    <form class="admin-add-form" id="adminAddForm">
+      <label>
+        <span>Аты-жөні</span>
+        <input name="fullName" type="text" autocomplete="off" required />
+      </label>
+      <label>
+        <span>Кім болады</span>
+        <input name="relation" type="text" autocomplete="off" required />
+      </label>
+      <label>
+        <span>Жауабы</span>
+        <select name="attendance" required>
+          <option>Иә, келемін</option>
+          <option>Жұбайыммен келемін</option>
+          <option>Өкінішке қарай келе алмаймын</option>
+        </select>
+      </label>
+      <label>
+        <span>Адам саны</span>
+        <input name="guestCount" type="number" min="1" max="10" value="1" required />
+      </label>
+      <button class="primary-button" type="submit">Қосу</button>
+      <p class="status-text" id="adminAddStatus" aria-live="polite"></p>
+    </form>
     <div class="admin-actions">
       <button class="primary-button" id="exportCsv" type="button">CSV жүктеу</button>
     </div>
@@ -478,6 +655,7 @@ function setupAdminRoute() {
             <th>Жауабы</th>
             <th>Адам саны</th>
             <th>Уақыты</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="guestRows"></tbody>
@@ -486,7 +664,71 @@ function setupAdminRoute() {
   `;
   main.appendChild(adminSection);
 
+  $("#adminLoginForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const token = new FormData(event.currentTarget).get("password");
+    if (adminLoginResolve) {
+      adminLoginResolve(String(token || "").trim());
+      adminLoginResolve = null;
+    }
+  });
+
   $("#exportCsv").addEventListener("click", exportGuestsCsv);
+
+  document.querySelectorAll("[data-admin-filter]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      adminFilter = button.dataset.adminFilter;
+      await renderAdmin();
+    });
+  });
+
+  $("#adminAddForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const status = $("#adminAddStatus");
+    const data = new FormData(form);
+    const answer = {
+      fullName: (data.get("fullName") || "").trim(),
+      relation: (data.get("relation") || "").trim(),
+      attendance: data.get("attendance"),
+      guestCount: Number(data.get("guestCount")),
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!answer.fullName || !answer.relation || !answer.attendance || !answer.guestCount) {
+      status.textContent = "Барлық жолды толтырыңыз.";
+      return;
+    }
+
+    try {
+      await addGuest(answer);
+      status.textContent = "Қонақ қосылды.";
+      form.reset();
+      form.guestCount.value = 1;
+      await renderAdmin();
+    } catch {
+      status.textContent = "Қосу мүмкін болмады.";
+    }
+  });
+
+  $("#guestRows").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-delete-guest]");
+    if (!button) return;
+
+    const id = button.dataset.deleteGuest;
+    if (!window.confirm("Осы жауапты өшіресіз бе?")) return;
+
+    button.disabled = true;
+
+    try {
+      await deleteRemoteGuest(id);
+      await deleteLocalGuest(id);
+      await renderAdmin();
+    } catch {
+      await deleteLocalGuest(id);
+      await renderAdmin();
+    }
+  });
 
   function isAdminPath() {
     const path = decodeURIComponent(window.location.pathname).replace(/\/$/, "");
