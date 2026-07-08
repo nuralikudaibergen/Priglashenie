@@ -3,6 +3,7 @@ const CONFIG = {
   address: "Жеті қазына-2, Түркістан қаласы",
   mapUrl: "https://2gis.kz/turkestan/geo/70000001106093046/68.244340,43.317621",
   apiUrl: "/api/rsvp",
+  adminTokenKey: "rsvp_admin_token",
   dbName: "ernar_aruzhan_invitation",
   storeName: "rsvp_answers",
   adminPaths: ["/admin", "/админ"],
@@ -111,11 +112,25 @@ async function addRemoteGuest(answer) {
 }
 
 async function getRemoteGuests() {
+  let adminToken = sessionStorage.getItem(CONFIG.adminTokenKey);
+
+  if (!adminToken) {
+    adminToken = window.prompt("Admin code");
+    if (!adminToken) throw new Error("Admin token is required");
+    sessionStorage.setItem(CONFIG.adminTokenKey, adminToken);
+  }
+
   const response = await fetch(CONFIG.apiUrl, {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      "X-Admin-Token": adminToken,
+    },
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionStorage.removeItem(CONFIG.adminTokenKey);
+    }
     throw new Error("Remote RSVP storage is unavailable");
   }
 
@@ -148,10 +163,12 @@ async function addGuest(answer) {
 }
 
 async function getGuests() {
+  const localRows = await getLocalGuests();
+
   try {
-    return sortRows(await getRemoteGuests());
+    return mergeRows(await getRemoteGuests(), localRows);
   } catch {
-    return sortRows(await getLocalGuests());
+    return localRows;
   }
 }
 
