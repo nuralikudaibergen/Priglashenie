@@ -166,24 +166,11 @@ img {
 .hero {
   min-height: 100svh;
   display: grid;
-  grid-template-columns: minmax(300px, 0.78fr) minmax(320px, 1fr);
-  gap: clamp(28px, 5vw, 76px);
+  grid-template-columns: minmax(0, 760px);
+  justify-content: center;
   align-items: center;
   padding: clamp(24px, 5vw, 72px);
-}
-
-.hero__photo {
-  margin: 0;
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
-  background: var(--pearl);
-}
-
-.hero__photo img {
-  aspect-ratio: 4 / 5;
-  object-fit: cover;
-  object-position: 52% 42%;
+  text-align: center;
 }
 
 .hero__content {
@@ -785,17 +772,8 @@ td {
 }
 
 @media (max-width: 860px) {
-  .hero,
   .route {
     grid-template-columns: 1fr;
-  }
-
-  .hero__photo {
-    order: -1;
-  }
-
-  .hero__photo img {
-    max-height: 72svh;
   }
 
   .countdown,
@@ -807,25 +785,12 @@ td {
 @media (max-width: 560px) {
   .hero {
     min-height: 100dvh;
-    align-content: start;
-    gap: 22px;
+    align-content: center;
     padding: max(14px, env(safe-area-inset-top)) 16px 44px;
-  }
-
-  .hero__photo {
-    width: min(100%, 420px);
-    justify-self: center;
-  }
-
-  .hero__photo img {
-    max-height: 48dvh;
-    aspect-ratio: 3 / 4;
-    object-position: 52% 36%;
   }
 
   .hero__content {
     max-width: 100%;
-    text-align: center;
   }
 
   .hero h1 {
